@@ -27,7 +27,7 @@ local radwobble = require("radwobble")
 - ``rad``: Artificially tweak the force applied. Ranges from 0 - 1; 0: Normal force, 1: Maxed out. If nil, will default to 0.
 
 > [!NOTE]
-> Forces using Vector3s as their value do not apply linearly, and are relative and oriented to ``pos``. This can be mediated by setting ``pos`` just outside the model bounds and setting ``rad`` to 1.
+> Forces using Vector3s as their value are not linear, but radial relative to ``pos``. This can be mediated by setting ``rad`` to 1, which will treat the force as a scale vector with ``pos`` as its pivot.
 
 ## remove(model)
 - ``model``: Remove physics from this model.
