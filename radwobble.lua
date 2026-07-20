@@ -1,4 +1,4 @@
---WHAMWobble: Applies spring physics on all vertices of a model, instead of scaling the root parent.
+--radwobble v0.2
 local api, tasks = {}, {}
 
 local function getVertexGroups(cube)
@@ -50,7 +50,7 @@ local function getVertexGroups(cube)
 	}
 end
 
-local function createVertexNodes(mdl, _tbl)
+local function createVertexNodes(mdl, _tbl, exclude)
 	local tbl = _tbl or {}
 	for _, v in pairs(mdl:getChildren()) do
 		if v:getType() ~= "GROUP" then
@@ -61,7 +61,14 @@ local function createVertexNodes(mdl, _tbl)
 				})
 			end
 		else
-			createVertexNodes(v, tbl)
+			if not exclude[v:getName()] then
+				table.insert(tbl, {
+					vertex = {v},
+					anchor = v:getPivot(),
+					isGroup = true
+				})
+			end
+			createVertexNodes(v, tbl, exclude)
 		end
 	end
 	return tbl
@@ -71,8 +78,10 @@ local function sign(x)
 	return x > 0 and 1 or x < 0 and -1 or 0
 end
 
-function api.new(mdl, k, m, d)
-	local vert = createVertexNodes(models.model)
+function api.new(mdl, k, m, d, exclude)
+	local _exclude, tbl = exclude or {}, {}
+	for i = 1, #_exclude do tbl[_exclude[i]] = true end
+	local vert = createVertexNodes(mdl, nil, tbl)
 	local spring = {}
 	for i = 1, #vert do 
 		table.insert(spring, {
@@ -93,15 +102,25 @@ function api.new(mdl, k, m, d)
 	}
 end
 
-function api.apply(mdl, pos, f, rad)
+function api.apply(mdl, pos, f)
 	if not tasks[mdl:getName()] then return end
 	if f == 0 or f == vec(0, 0, 0) then return end
 	local vert = tasks[mdl:getName()].vert
 	for i, v in ipairs(tasks[mdl:getName()].spring) do
-		local len = pos - vert[i].anchor
-		local amp = (1 - len:length() / vert[i].anchor:length()) + (rad or 0)
+		local len =  vert[i].anchor - pos
+		local amp = (1 - len:length() / vert[i].anchor:length())
 		local dir = vec(sign(len.x), sign(len.y), sign(len.z))
-		v.v = v.v - (f * (amp < 0 and 0 or amp > 1 and 1 or amp) * dir)
+		v.v = v.v - (f * (amp < 0 and 0 or amp) * dir)
+		v.active, v.timeInactive = true, 0
+	end
+end
+
+function api.applyLinear(mdl, f)
+	if not tasks[mdl:getName()] then return end
+	if f == 0 or f == vec(0, 0, 0) then return end
+	local vert = tasks[mdl:getName()].vert
+	for i, v in ipairs(tasks[mdl:getName()].spring) do 
+		v.v = v.v + vert[i].anchor * f 
 		v.active, v.timeInactive = true, 0
 	end
 end
@@ -141,7 +160,7 @@ function events.render(delta, context)
 			for i, vert in ipairs(v.vert) do
 				if spring[i].active then
 					for j = 1, #vert.vertex do 
-						vert.vertex[j]:pos(math.lerp(v.spring[i].old, v.spring[i].v, delta) + vert.anchor)
+						vert.vertex[j]:pos(math.lerp(v.spring[i].old, v.spring[i].v, delta) + (not vert.isGroup and vert.anchor or 0))
 					end
 				end
 			end
