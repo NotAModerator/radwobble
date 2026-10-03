@@ -16,7 +16,7 @@ local radwobble = require("radwobble")
 - ``k``: How stiff the springs should be.
 - ``m``: Mass of the model.
 - ``d``: How much to dampen spring movement by over time.
-- ``exclude``: Table containing the names of modelParts/groups you wish to **NOT** apply physics to.
+- ``exclude``: Table containing the names of modelParts/groups that should be ignored.
 
 > [!WARNING]
 > Higher complexity models will increase the overall instruction count while this script is active, so exercise caution on permissions lower than MAX.
