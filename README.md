@@ -27,7 +27,7 @@ local radwobble = require("radwobble")
 - ``t``: Time in ticks between ripples.
 - ``func``: Function that accepts two arguments: ``pos`` and ``anchor``.
   - ``pos``: Same as applyFunc's argument.
-  - ``anchor``: The position of the vertex itself.
+  - ``anchor``: The position of each vertex.
 
 ## remove(model)
 - ``model``: Remove physics from this model.
