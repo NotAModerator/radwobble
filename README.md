@@ -24,7 +24,7 @@ local radwobble = require("radwobble")
 ## applyFunc(model, pos, t, func)
 - ``model``: Model to apply force to.
 - ``pos``: Centerpoint of the force.
-- ``t``: Factor to multiply delay based on vertex distance from ``pos``.
+- ``t``: Time in ticks between ripples.
 - ``func``: Function that accepts two arguments: ``pos`` and ``anchor``.
   - ``pos``: Same as applyFunc's argument.
   - ``anchor``: The position of the vertex itself.
@@ -33,13 +33,12 @@ local radwobble = require("radwobble")
 - ``model``: Remove physics from this model.
 
 # Example
-
 ```lua
 vanilla_model.ALL:visible(false)
 local radwobble = require("radwobble")
 
 --create new effect
-radwobble.new(models.model, .8, 1, .2, {"bone"})
+radwobble.new(models.model, .8, 1, .2)
 
 --get player velocity and adjust to match player rotation, and apply-
 --velocity * 16 (worldspace) and scaling based on crouch state
