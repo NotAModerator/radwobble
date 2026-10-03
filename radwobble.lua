@@ -1,152 +1,108 @@
---radwobble v0.2
 local api, tasks = {}, {}
 
-local function getVertexGroups(cube)
-	local vertices = nil
-	for i = 1, #cube:getTextures() do
-		vertices = vertices or cube:getAllVertices()[cube:getTextures()[i]:getName()]
-	end
-	return {
-		{
-			vertices[1],
-			vertices[10],
-			vertices[22]
-		},
-		{
-			vertices[2],
-			vertices[13],
-			vertices[21]
-		},
-		{
-			vertices[3],
-			vertices[16],
-			vertices[20]
-		},
-		{
-			vertices[4],
-			vertices[19],
-			vertices[11]
-		},
-		{
-			vertices[5],
-			vertices[14],
-			vertices[24]
-		},
-		{
-			vertices[6],
-			vertices[9],
-			vertices[23]
-		},
-		{
-			vertices[7],
-			vertices[12],
-			vertices[18]
-		},
-		{
-			vertices[8],
-			vertices[17],
-			vertices[15]
-		}
-	}
+local function serialize(vec3)
+	return table.concat({vec3:unpack()}, "_")
 end
 
-local function createVertexNodes(mdl, _tbl, exclude)
-	local tbl = _tbl or {}
-	for _, v in pairs(mdl:getChildren()) do
-		if v:getType() ~= "GROUP" then
-			for _, vertex in ipairs(getVertexGroups(v)) do
-				table.insert(tbl, {
-					vertex = vertex,
-					anchor = vertex[1]:getPos()
-				})
-			end
-		else
-			if not exclude[v:getName()] then
-				table.insert(tbl, {
-					vertex = {v},
-					anchor = v:getPivot(),
-					isGroup = true
-				})
-			end
-			createVertexNodes(v, tbl, exclude)
-		end
+local function toRootSpace(vec3, chld)
+	return matrices.translate4(vec3):rotate(chld:getRot() * -1):apply()
+end
+
+local function isInTable(value, tbl)
+	for i = 1, #tbl do if value == tbl[i] then return true end end
+end
+
+local function groupMeshVertices(mesh)
+	local tbl, vertices = {}, mesh:getAllVertices()[mesh:getTextures()[1]:getName()]
+	for _, vert in pairs(vertices) do
+		local id = serialize(vert:getPos())
+		if not tbl[id] then tbl[id] = {} end
+		table.insert(tbl[id], vert)
 	end
 	return tbl
 end
 
-local function sign(x)
-	return x > 0 and 1 or x < 0 and -1 or 0
+local function createVertexNodes(mdl, _vertices, exclude)
+	local vertices = _vertices or {}
+	for _, chld in pairs(mdl:getChildren()) do
+		local chldType = chld:getType()
+		if chldType ~= "GROUP" then
+			for _, vertex in pairs(groupMeshVertices(chld)) do
+				table.insert(vertices, {
+					vertex = vertex,
+					anchor = vertex[1]:getPos(),
+					parent = chld
+				})
+			end
+		else
+			if not isInTable(chld:getName(), exclude) then
+				table.insert(vertices, {
+					vertex = {chld},
+					anchor = chld:getPivot(),
+					parent = chld
+				})
+			end
+			createVertexNodes(chld, vertices, exclude)
+		end
+	end
+	return vertices
 end
 
-function api.new(mdl, k, m, d, exclude)
-	local _exclude, tbl = exclude or {}, {}
-	for i = 1, #_exclude do tbl[_exclude[i]] = true end
-	local vert = createVertexNodes(mdl, nil, tbl)
-	local spring = {}
-	for i = 1, #vert do 
-		table.insert(spring, {
+function api.new(model, k, m, d, exclude)
+	local nodes = createVertexNodes(model, nil, exclude or {})
+	for _, node in ipairs(nodes) do
+		node.spring, node.queue = {
 			vel = vec(0, 0, 0),
 			v = vec(0, 0, 0),
+			active = 0,
 			old = vec(0, 0, 0),
-			active = false,
-			timeInactive = 0
-		})
+			eq = vec(0, 0, 0),
+			k = k,
+			m = m,
+			d = d
+		}, {}
 	end
-	tasks[mdl:getName()] = {
-		vert = vert,
-		spring = spring,
-		eq = vec(0, 0, 0),
-		k = k,
-		m = m,
-		d = d
-	}
+	tasks[model:getName()] = nodes
 end
 
-function api.apply(mdl, pos, f)
-	if not tasks[mdl:getName()] then return end
-	if f == 0 or f == vec(0, 0, 0) then return end
-	local vert = tasks[mdl:getName()].vert
-	for i, v in ipairs(tasks[mdl:getName()].spring) do
-		local len =  vert[i].anchor - pos
-		local amp = (1 - len:length() / vert[i].anchor:length())
-		local dir = vec(sign(len.x), sign(len.y), sign(len.z))
-		v.v = v.v - (f * (amp < 0 and 0 or amp) * dir)
-		v.active, v.timeInactive = true, 0
+function api.applyFunc(model, pos, t, func)
+	for _, node in ipairs(tasks[model:getName()]) do
+		local f = toRootSpace(func(pos, node.anchor), node.parent)
+		if f:length() > 0 then
+			table.insert(node.queue, {
+				force = f,
+				timer = (pos - node.anchor):length() * t
+			})
+		end
 	end
 end
 
-function api.applyLinear(mdl, f)
-	if not tasks[mdl:getName()] then return end
-	if f == 0 or f == vec(0, 0, 0) then return end
-	local vert = tasks[mdl:getName()].vert
-	for i, v in ipairs(tasks[mdl:getName()].spring) do 
-		v.v = v.v + vert[i].anchor * f 
-		v.active, v.timeInactive = true, 0
+function api.remove(model)
+	for _, node in pairs(tasks[model:getName()]) do
+		for i = 1, #node.vertex do node.vertex[i]:pos(node.anchor) end
 	end
-end
-
-function api.remove(mdl)
-	for _, vertex in pairs(tasks[mdl:getName()].vert) do
-		for i = 1, #vertex.vertex do vertex.vertex[i]:pos(vertex.anchor) end
-	end
-	tasks[mdl:getName()] = nil
+	tasks[model:getName()] = nil
 end
 
 function events.tick()
-	for k, v in pairs(tasks) do
-		for i, s in pairs(v.spring) do
-			if s.active then
-				local displacement = s.v - v.eq
-				local force = (v.k * -1) * displacement
-				local accel = (force / v.m)
-				s.vel = (s.vel + accel) * (1 - v.d)
+	for _, task in pairs(tasks) do
+		for _, node in pairs(task) do
+			local s = node.spring
+			if s.active > 0 then
+				local force = -s.k * s.v - s.eq
+				local accel = force / s.m
+				s.vel = (s.vel + accel) * (1 - s.d)
 				s.old = s.v
 				s.v = s.v + s.vel
-				if math.floor(s.v:length()) == 0 then
-					s.timeInactive = s.timeInactive + 1
-					if s.timeInactive > 40 then
-						s.active = false
-					end
+				if s.v:length() < .1 then s.active = s.active - 1 end
+			end
+			for k, a in pairs(node.queue) do
+				if a.timer < 1 then
+					s.v = s.v - a.force
+					s.active = 20
+					node.queue[k] = nil
+				else
+					a.timer = a.timer - 1
 				end
 			end
 		end
@@ -155,12 +111,12 @@ end
 
 function events.render(delta, context)
 	if context ~= "PAPERDOLL" then
-		for _, v in pairs(tasks) do
-			local spring = v.spring
-			for i, vert in ipairs(v.vert) do
-				if spring[i].active then
-					for j = 1, #vert.vertex do 
-						vert.vertex[j]:pos(math.lerp(v.spring[i].old, v.spring[i].v, delta) + (not vert.isGroup and vert.anchor or 0))
+		for _, task in pairs(tasks) do
+			for _, node in ipairs(task) do
+				if node.spring.active > 0 then
+					local anchor = #node.vertex > 1 and node.anchor or 0
+					for j = 1, #node.vertex do
+						node.vertex[j]:pos(math.lerp(node.spring.old + anchor, node.spring.v + anchor, delta))
 					end
 				end
 			end
