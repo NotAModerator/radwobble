@@ -12,11 +12,11 @@ local radwobble = require("radwobble")
 
 # Documentation
 ## new(model, k, m, d, exclude)
-- ``model``: Model to apply spring physics to. Will not apply forces to groups themselves, instead just the vertices of ModelParts.
+- ``model``: Model to apply spring physics to.
 - ``k``: How stiff the springs should be.
 - ``m``: Mass of the model.
 - ``d``: How much to dampen spring movement by over time.
-- ``exclude``: Table containing the names of modelParts you wish to not apply physics to.
+- ``exclude``: Table containing the names of modelParts/groups you wish to **NOT** apply physics to.
 
 > [!WARNING]
 > Higher complexity models will increase the overall instruction count while this script is active, so exercise caution on permissions lower than MAX.
